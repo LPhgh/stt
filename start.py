@@ -2,9 +2,10 @@ import logging,shutil
 import re
 import threading
 import sys
+import os
+
 import torch
 from flask import Flask, request, render_template, jsonify, send_from_directory,Response
-import os
 from gevent.pywsgi import WSGIServer, WSGIHandler, LoggingLogAdapter
 from logging.handlers import RotatingFileHandler
 import warnings
@@ -13,6 +14,7 @@ import stslib
 from stslib import cfg, tool
 from stslib.cfg import ROOT_DIR
 from faster_whisper import WhisperModel
+from modelscope import snapshot_download
 import time
 from werkzeug.utils import secure_filename
 import uuid
@@ -136,15 +138,41 @@ def shibie():
         modelobj=cfg.MODEL_DICT.get(model)
         if not modelobj:
             try:
-                print(f'开始加载模型，若不存在将自动下载')
-                modelobj= WhisperModel(
-                    model  if not model.startswith('distil') else  model.replace('-whisper', ''), 
-                    device=sets.get('devtype'), 
-                    download_root=cfg.ROOT_DIR + "/models"
+                # 处理 distil 模型名称
+                model_name = model if not model.startswith('distil') else model.replace('-whisper', '')
+                
+                # 构建仓库 ID 和本地路径
+                repo_id = f"Systran/faster-whisper-{model_name}" if '/' not in model_name else model_name
+                cache_dir = os.path.join(cfg.ROOT_DIR, "models")
+                
+                print('=' * 50)
+                print(f'[模型下载] 开始下载模型: {model_name}')
+                print(f'[模型下载] 来源: {repo_id}')
+                print(f'[模型下载] 使用: ModelScope（国内镜像）')
+                print(f'[模型下载] 目标路径: {cache_dir}')
+                print('=' * 50)
+                
+                # 使用 ModelScope 下载模型（显示进度条）
+                print(f'[模型下载] 开始下载...')
+                model_path = snapshot_download(
+                    repo_id,
+                    cache_dir=cache_dir
                 )
-                cfg.MODEL_DICT[model]=modelobj
+                print(f'[模型下载] ✓ 下载完成: {model_path}')
+                
+                print(f'[模型加载] 正在初始化模型...')
+                # 直接使用下载的路径加载模型，避免 huggingface_hub 再次查找
+                modelobj = WhisperModel(
+                    model_path,  # 使用 ModelScope 下载的完整路径
+                    device=sets.get('devtype'), 
+                    download_root=None  # 不需要再指定下载目录
+                )
+                cfg.MODEL_DICT[model] = modelobj
+                print(f'[模型加载] ✓ 模型 {model_name} 加载成功')
+                print('=' * 50)
             except Exception as e:
-                err=f'从 huggingface.co 下载模型 {model} 失败，请检查网络连接' if model.find('/')>0 else ''
+                print(f'[模型下载] ✗ 下载失败: {str(e)}')
+                err=f'下载模型 {model} 失败，请检查网络连接' if model.find('/')>0 else f'下载模型 {model} 失败: '
                 cfg.progressresult[key]='error:'+err+str(e)
                 return
         try:
