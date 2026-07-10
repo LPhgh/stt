@@ -176,6 +176,7 @@ def shibie():
                 cfg.progressresult[key]='error:'+err+str(e)
                 return
         try:
+            print(f'[识别开始] 文件: {wav_file}, 模型: {model}, 语言: {language}')
             segments,info = modelobj.transcribe(
                 wav_file,  
                 beam_size=sets.get('beam_size'),
@@ -216,8 +217,17 @@ def shibie():
                 raw_subtitles = "\n".join(raw_subtitles)
             cfg.progressresult[key]=raw_subtitles
         except Exception as e:
+            import traceback
+            error_detail = traceback.format_exc()
+            print(f'[识别错误] {str(e)}')
+            print(error_detail)
             cfg.progressresult[key]='error:'+str(e)
-            print(str(e))
+            # 尝试清理 GPU 内存
+            try:
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except:
+                pass
 
 
 
