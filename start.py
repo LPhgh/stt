@@ -74,13 +74,12 @@ def upload():
         # 如果是mp4
         noextname, ext = os.path.splitext(audio_file.filename)
         ext = ext.lower()
-        # 如果是视频，先分离
-        wav_file = os.path.join(cfg.TMP_DIR, f'{noextname}.wav')
-        if os.path.exists(wav_file) and os.path.getsize(wav_file) > 0:
-            return jsonify({'code': 0, 'msg': cfg.transobj['lang1'], "data": os.path.basename(wav_file)})
+        # 使用 UUID 前缀避免同名文件导致的结果污染
+        unique_id = uuid.uuid4().hex[:8]
+        wav_file = os.path.join(cfg.TMP_DIR, f'{unique_id}_{noextname}.wav')
         
         msg = ""
-        video_file = os.path.join(cfg.TMP_DIR, f'{noextname}{ext}')
+        video_file = os.path.join(cfg.TMP_DIR, f'{unique_id}_{noextname}{ext}')
         audio_file.save(video_file)
         params = [
             "-i",
